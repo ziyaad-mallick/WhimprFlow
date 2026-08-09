@@ -6,7 +6,7 @@ const TIPS: { emoji: string; title: string; body: string }[] = [
   {
     emoji: "🎙️",
     title: "Hold to dictate",
-    body: "Press and hold your dictation key (Fn by default), speak naturally, then release. WhimprFlow transcribes on-device — nothing leaves your Mac unless you choose a cloud cleanup engine.",
+    body: "Press and hold your dictation key — Fn on macOS, Right Ctrl on Windows — speak naturally, then release. WhimprFlow transcribes on-device: nothing leaves your computer unless you choose a cloud cleanup engine.",
   },
   {
     emoji: "✨",
@@ -21,7 +21,7 @@ const TIPS: { emoji: string; title: string; body: string }[] = [
   {
     emoji: "🔑",
     title: "Pick a cleanup engine",
-    body: "Under Settings → Cleanup Engine, run fully offline (Local), paste exactly what you said (Raw), or add an OpenAI / Anthropic key for cloud cleanup. Keys are stored in your macOS keychain.",
+    body: "Under Settings → Cleanup Engine, run fully offline (Local), paste exactly what you said (Raw), or add an OpenAI / Anthropic key for cloud cleanup. Keys are stored in the OS keychain — macOS Keychain or Windows Credential Manager — never in a file.",
   },
 ];
 
