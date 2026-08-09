@@ -1,0 +1,97 @@
+# Runs on every pull request, and on every push to main.
+#
+# Deliberately scoped to what can go green in a couple of minutes on a hosted
+# runner with nothing installed: the two pure-logic crates, and the UI's type
+# check and production build.
+#
+# What this does NOT cover, so nobody reads a green tick as more than it is:
+# everything in src-tauri/ — including the autolearn correction filters and their
+# tests, which are real tests that no CI here executes.
+#
+# The native build (whimpr-asr, whimpr-llm-worker, src-tauri) is NOT here yet.
+# It needs CMake + LLVM/clang for bindgen, compiles whisper.cpp and llama.cpp
+# from source, and wants a warm sccache to finish in a sane time — worth doing,
+# but as its own job by someone who can iterate on a runner. Until then this at
+# least stops a change from silently breaking the state machine, the cleanup
+# gates, the dictionary, the stats math, the IPC codec, or the TypeScript.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch supersedes the first.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: rust — core logic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest ships a current stable Rust, which satisfies the
+      # workspace's rust-version = 1.82. No toolchain action needed.
+      - name: Versions
+        run: |
+          cargo --version
+          rustc --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # -p keeps this off the crates that need CMake/clang and multi-GB C++ deps.
+      # --locked makes the committed Cargo.lock authoritative, so CI fails on an
+      # out-of-date lockfile instead of quietly resolving something else.
+      - name: Test
+        run: cargo test --locked -p whimpr-core -p whimpr-ipc
+
+      # Advisory, not a gate: -D warnings on a codebase clippy has never seen
+      # would fail this PR on pre-existing lints rather than on a regression.
+      # Worth turning into a gate once the existing output is at zero.
+      - name: Clippy (advisory)
+        continue-on-error: true
+        run: cargo clippy --locked -p whimpr-core -p whimpr-ipc --all-targets
+
+  ui:
+    name: ui — typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # 10, not 9: ui/pnpm-workspace.yaml uses `onlyBuiltDependencies`, which
+          # is a pnpm 10 key. Under 9 it is silently inert.
+          version: 10
+          # There is no package.json at the repo root, and the action reads one to
+          # look for a `packageManager` field.
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+        working-directory: ui
+
+      # `pnpm build` is `tsc --noEmit && vite build` — strict type check, then
+      # the real Rollup build of both entry points (hub + overlay).
+      - name: Typecheck and build
+        run: pnpm build
+        working-directory: ui
