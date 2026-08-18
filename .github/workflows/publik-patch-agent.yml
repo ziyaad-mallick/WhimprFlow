@@ -47,11 +47,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Each app fills this in for its own stack. The agent needs to be able
-      # to run the test suite, or it cannot prove anything.
-      - name: Set up toolchain
-        run: |
-          echo "Replace with this repo's setup (node/pnpm, cargo, swift, uv...)"
+      # The agent needs to be able to run the test suite, or it cannot prove
+      # anything. This mirrors ci.yml: cargo is preinstalled on the runner, and
+      # the suite the agent can actually execute is
+      #
+      #     cargo test --locked -p whimpr-core -p whimpr-ipc
+      #     cd ui && pnpm build          # tsc --noEmit && vite build
+      #
+      # That is the WHOLE suite available here. Nothing in src-tauri/ runs —
+      # including autolearn's tests, which exist but are unreachable without the
+      # native toolchain. A break in those, or anywhere in the native crates, is one
+      # the agent should report rather than guess at: it cannot reproduce it, so per
+      # step 1 of the prompt below it must open no pull request.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          package_json_file: ui/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Install UI deps
+        run: pnpm install --frozen-lockfile
+        working-directory: ui
 
       - name: Attempt the fix
         uses: anthropics/claude-code-action@v1
